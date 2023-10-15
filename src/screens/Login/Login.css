@@ -1,0 +1,86 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App {
+  background-color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+.user {
+  padding-top: 5px;
+  width: 300px;
+  height: 30px;
+  border-radius: 10px;
+  font: normal 15pt Arial;
+  border: none;
+  outline: none;
+}
+
+.password {
+  padding-top: 5px;
+  width: 300px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  font: normal 15pt Arial;
+  outline: none;
+}
+
+.div_password {
+  padding-top: 30px;
+}
+
+.enter {
+  width: 120px;
+  height: 30px;
+  font: normal 15pt Arial;
+  border-radius: 9px;
+}
+
+.div_enter {
+  padding-top: 20px
+}
+
+.login_comp {
+  background: rgb(58, 202, 90);
+  width: 400px;
+  height: 350px;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.452);
+  border-radius: 10px;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
