@@ -1,21 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { Box, TextField, Button, Accordion, AccordionSummary, AccordionDetails, Card, CardHeader, CardContent, CardActions, MenuItem } from '@mui/material';
+import {
+  Box,
+  TextField,
+  Button,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Card,
+  CardHeader,
+  CardContent,
+  CardActions,
+  styled
+} from '@mui/material';
 import * as Icon from '@mui/icons-material';
 import { DataGrid, GridActionsCellItem, GridColDef, GridRowsProp, GridToolbarContainer, GridToolbarExport } from '@mui/x-data-grid';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { setLoading } from '../../utils/loadingState';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import { useFormik } from 'formik';
-import { database } from '../../services/firebase';
 import * as Yup from 'yup';
-import useStyle from './style';
+
+import { setLoading } from '../../utils/loadingState';
 import { translateMessageErrorToPTBR } from '../../utils/messageErrorsFirebase';
+import { database, storage } from '../../services/firebase';
 import ProductType from '../../types/Product.type';
-import './styles.css'
+import useStyle from './style';
 
 const Products: React.FC = () => {
   const [formIsVisible, setFormIsVisible] = useState(false);
   const classes = useStyle();
+  const [fileImage, setFileImage] = useState<File>();
 
   const dataGridColumns: GridColDef[] = [
     { field: 'id', headerName: 'Código', flex: 1 },
@@ -25,7 +39,7 @@ const Products: React.FC = () => {
       headerName: 'Imagem',
       flex: 1,
       renderCell: param => (
-        <img src={param.value} className='product_image' />
+        <img src={param.value} className={classes.productImageGrid} alt={param.row.description} />
       )
     },
     { field: 'quantity', headerName: 'Quantidade', flex: 1 },
@@ -41,17 +55,17 @@ const Products: React.FC = () => {
           <GridActionsCellItem
             disabled={formIsVisible}
             icon={<Icon.Edit color='warning' filter={`grayscale(${formIsVisible ? '1' : '0'})`} />}
-            label="Edit"
-            className="textPrimary"
+            label='Edit'
+            className='textPrimary'
             onClick={() => handleEditClick(row)}
-            color="inherit"
+            color='inherit'
           />,
           <GridActionsCellItem
             disabled={formIsVisible}
             icon={<Icon.Delete color='error' filter={`grayscale(${formIsVisible ? '1' : '0'})`} />}
-            label="Delete"
+            label='Delete'
             onClick={() => handleDeleteClick(row.uid)}
-            color="inherit"
+            color='inherit'
           />
         ];
       }
@@ -64,7 +78,8 @@ const Products: React.FC = () => {
     const snapshot = onSnapshot(collection(database, 'catalog'), snapshot => {
       setDataGridRows(snapshot.docs.map(doc => ({
         ...(doc.data() as ProductType),
-        id: +doc.id
+        id: +doc.id,
+        uid: doc.id
       })))
     });
 
@@ -76,11 +91,13 @@ const Products: React.FC = () => {
   const handleCancelClick = () => {
     setFormIsVisible(false);
     formik.resetForm();
+    setFileImage(undefined);
   }
 
   const handleEditClick = (row: any) => {
-    const { id, description, price, image, image_url, quantity } = row;
+    const { uid, id, description, price, image, image_url, quantity } = row;
     formik.setValues({
+      uid,
       id,
       description,
       price,
@@ -95,7 +112,14 @@ const Products: React.FC = () => {
     const isDelete = window.confirm('Deseja deletar o item?')
     if (!isDelete) return;
     setLoading(true);
-    deleteDoc(doc(database, 'products', uid)).then(() => {
+
+    const imageName = dataGridRows.find(item => item.uid === uid)?.image;
+    const imageRef = ref(storage, `catalog/${imageName}`);
+    deleteObject(imageRef).catch(() => {
+      toast.error('Erro ao deletar imagem da base de dados.')
+    });
+
+    deleteDoc(doc(database, 'catalog', uid)).then(() => {
       toast.success('Item removido com sucesso');
     }).finally(() => {
       setLoading(false);
@@ -103,11 +127,14 @@ const Products: React.FC = () => {
   }
 
   const handleAddToolbarButton = () => {
+    formik.resetForm();
+    formik.values.id = dataGridRows[dataGridRows.length-1].id + 1;
     setFormIsVisible(true)
   }
 
   const formik = useFormik({
     initialValues: {
+      uid: '',
       id: 0,
       description: '',
       price: 0,
@@ -116,25 +143,36 @@ const Products: React.FC = () => {
       quantity: 0
     },
     validationSchema: Yup.object({
-      ean: Yup.string().required('EAN é obrigatório'),
-      name: Yup.string().max(255).required('Nome é obrigatório'),
-      min_quantity: Yup.number().required('Quantidade mínima é obrigatório'),
+      id: Yup.number().required('Código é obrigatório'),
+      description: Yup.string().max(255).required('Nome é obrigatório'),
       quantity: Yup.number().required('Quantidade é obrigatório'),
+      price: Yup
+        .number()
+        .required('Preço é obrigatório')
+        .test('two-decimals', 'Preço deve conter 2 casas decimais.', (value:any) => value && /^\d+(\.\d{0,2})?$/.test(value))
     }),
     onSubmit: (values) => submit(values)
   });
 
-  const submit = ({ id, description, price, image, image_url, quantity }: ProductType) => {
+  const submit = async ({ uid, id, description, price, image, image_url, quantity }: ProductType) => {
     setLoading(true);
     toast.dismiss();
-    if (id) {
-      setDoc(doc(database, 'catalog', id.toString()), {
-        id,
+    if (uid) {
+      const uploadedFileData = {image, image_url};
+      if (fileImage) {
+        const uploadedFile = await uploadFile();
+        if (!uploadedFile) {
+          toast.error('Erro ao enviar imagem.');
+          return;
+        }
+        uploadedFileData.image = uploadedFile.image;
+        uploadedFileData.image_url = uploadedFile.image_url;
+      }
+      setDoc(doc(database, 'catalog', uid), {
         description,
         price,
-        image,
-        image_url,
-        quantity
+        quantity,
+        ...uploadedFileData
       }).then(() => {
         toast.success('Item alterado com sucesso');
       }).catch(error => {
@@ -146,13 +184,21 @@ const Products: React.FC = () => {
       })
       return;
     }
-    addDoc(collection(database, 'catalog'), {
-      id,
+    if (!fileImage) {
+      toast.warning('Selecione uma imagem.');
+      setLoading(false);
+      return;
+    }
+    const uploadedFile = await uploadFile();
+    if (!uploadedFile) {
+      toast.error('Erro ao enviar imagem.');
+      return;
+    }
+    setDoc(doc(database, 'catalog', id.toString()), {
       description,
       price,
-      image,
-      image_url,
-      quantity
+      quantity,
+      ...uploadedFile
     }).then(() => {
       toast.success('Item cadastrado com sucesso')
     }).catch(error => {
@@ -162,6 +208,24 @@ const Products: React.FC = () => {
       setLoading(false);
       setFormIsVisible(false);
     })
+  }
+
+  const uploadFile = async () => {
+    if (!fileImage) return;
+    const storageRef = ref( storage, `catalog/${fileImage.name}`);
+
+    const resultUploadBytes = await uploadBytes(storageRef, fileImage);
+
+    if (!resultUploadBytes) {
+      return false;
+    }
+
+    const { name } = resultUploadBytes.ref;
+    const storageRefDownloadURL = ref(storage, `catalog/${name}`);
+    const image_url = await getDownloadURL(storageRefDownloadURL);
+
+    setFileImage(undefined);
+    return {image: name, image_url};
   }
 
   const AddToolbarButton: React.FC = () => {
@@ -177,6 +241,18 @@ const Products: React.FC = () => {
       </GridToolbarContainer>
     )
   }
+
+  const VisuallyHiddenInput = styled('input')({
+    clip: 'rect(0 0 0 0)',
+    clipPath: 'inset(50%)',
+    height: 1,
+    overflow: 'hidden',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    whiteSpace: 'nowrap',
+    width: 1,
+  });
 
   return (
     <div>
@@ -200,6 +276,7 @@ const Products: React.FC = () => {
                 }}
               >
                 <TextField
+                  fullWidth
                   label='Código'
                   error={Boolean(formik.touched.id && formik.errors.id)}
                   helperText={formik.touched.id && formik.errors.id}
@@ -209,8 +286,10 @@ const Products: React.FC = () => {
                   onChange={formik.handleChange}
                   type='text'
                   value={formik.values.id}
+                  disabled={Boolean(formik.values.uid)}
                 />
                 <TextField
+                  fullWidth
                   label='Descrição'
                   error={Boolean(formik.touched.description && formik.errors.description)}
                   helperText={formik.touched.description && formik.errors.description}
@@ -222,6 +301,7 @@ const Products: React.FC = () => {
                   value={formik.values.description}
                 />
                 <TextField
+                  fullWidth
                   label='Quantidade'
                   error={Boolean(formik.touched.quantity && formik.errors.quantity)}
                   helperText={formik.touched.quantity && formik.errors.quantity}
@@ -232,6 +312,25 @@ const Products: React.FC = () => {
                   type='text'
                   value={formik.values.quantity}
                 />
+                <TextField
+                  fullWidth
+                  label='Preço'
+                  error={Boolean(formik.touched.price && formik.errors.price)}
+                  helperText={formik.touched.price && formik.errors.price}
+                  margin='normal'
+                  name='price'
+                  onBlur={formik.handleBlur}
+                  onChange={formik.handleChange}
+                  type='text'
+                  value={formik.values.price}
+                />
+                <div className={classes.productImageUpload}>
+                  <Button component='label' variant='contained' startIcon={<Icon.CloudUpload />}>
+                    Imagem
+                    <VisuallyHiddenInput type='file' onChange={event => setFileImage(event.target.files?.[0])} />
+                  </Button>
+                  {(formik.values.image_url || fileImage) && <img className={classes.productImage} src={fileImage ? URL.createObjectURL(fileImage) : formik.values.image_url} alt='imagem' />}
+                </div>
               </Box>
             </CardContent>
             <CardActions sx={{ display: 'flex', justifyContent: 'end' }}>
