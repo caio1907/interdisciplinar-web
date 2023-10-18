@@ -21,7 +21,7 @@ const screens: ScreenProps[] = [
     name: 'Produtos',
     path: '/products',
     component: <Products />,
-    icon: <Icon.Home />
+    icon: <Icon.Window />
   }
 ];
 export default screens;
