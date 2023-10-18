@@ -10,7 +10,8 @@ import { setLoading } from './utils/loadingState';
 import {
   BrowserRouter,
   Routes,
-  Route
+  Route,
+  Navigate
 } from 'react-router-dom';
 import screens from './screens';
 import Layout from './components/Layout';
@@ -44,6 +45,7 @@ const App: React.FC = () => {
       {!logged ? (
         <Routes>
           <Route path='/' element={<Login />} />
+          <Route path='*' element={<Navigate to='/' replace />}/>
         </Routes>
       ) : (
         <>
