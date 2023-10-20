@@ -128,7 +128,7 @@ const Products: React.FC = () => {
 
   const handleAddToolbarButton = () => {
     formik.resetForm();
-    formik.values.id = dataGridRows[dataGridRows.length-1].id + 1;
+    formik.values.id = dataGridRows[dataGridRows.length - 1].id + 1;
     setFormIsVisible(true)
   }
 
@@ -149,7 +149,7 @@ const Products: React.FC = () => {
       price: Yup
         .number()
         .required('Preço é obrigatório')
-        .test('two-decimals', 'Preço deve conter 2 casas decimais.', (value:any) => value && /^\d+(\.\d{0,2})?$/.test(value))
+        .test('two-decimals', 'Preço deve conter 2 casas decimais.', (value: any) => value && /^\d+(\.\d{0,2})?$/.test(value))
     }),
     onSubmit: (values) => submit(values)
   });
@@ -157,8 +157,15 @@ const Products: React.FC = () => {
   const submit = async ({ uid, id, description, price, image, image_url, quantity }: ProductType) => {
     setLoading(true);
     toast.dismiss();
+    if (!uid) {
+      if (idExists(id)) {
+        toast.error(`Já existe um produto com esse código.`)
+        setLoading(false);
+        return;
+      }
+    }
     if (uid) {
-      const uploadedFileData = {image, image_url};
+      const uploadedFileData = { image, image_url };
       if (fileImage) {
         const uploadedFile = await uploadFile();
         if (!uploadedFile) {
@@ -210,9 +217,18 @@ const Products: React.FC = () => {
     })
   }
 
+  const idExists = (id: any) => {
+    for (let c = 0; c < dataGridRows.length; c++) {
+      if (id == dataGridRows[c].id) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const uploadFile = async () => {
     if (!fileImage) return;
-    const storageRef = ref( storage, `catalog/${fileImage.name}`);
+    const storageRef = ref(storage, `catalog/${fileImage.name}`);
 
     const resultUploadBytes = await uploadBytes(storageRef, fileImage);
 
@@ -225,7 +241,7 @@ const Products: React.FC = () => {
     const image_url = await getDownloadURL(storageRefDownloadURL);
 
     setFileImage(undefined);
-    return {image: name, image_url};
+    return { image: name, image_url };
   }
 
   const AddToolbarButton: React.FC = () => {
@@ -327,7 +343,7 @@ const Products: React.FC = () => {
                 <div className={classes.productImageUpload}>
                   <Button component='label' variant='contained' startIcon={<Icon.CloudUpload />}>
                     Imagem
-                    <VisuallyHiddenInput type='file' onChange={event => setFileImage(event.target.files?.[0])} />
+                    <VisuallyHiddenInput type='file' onChange={event => setFileImage(event.target.files?.[0])}></VisuallyHiddenInput>
                   </Button>
                   {(formik.values.image_url || fileImage) && <img className={classes.productImage} src={fileImage ? URL.createObjectURL(fileImage) : formik.values.image_url} alt='imagem' />}
                 </div>
