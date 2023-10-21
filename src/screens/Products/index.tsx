@@ -219,7 +219,7 @@ const Products: React.FC = () => {
 
   const idExists = (id: any) => {
     for (let c = 0; c < dataGridRows.length; c++) {
-      if (id == dataGridRows[c].id) {
+      if (id === dataGridRows[c].id) {
         return true;
       }
     }
