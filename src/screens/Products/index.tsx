@@ -44,6 +44,12 @@ const Products: React.FC = () => {
     },
     { field: 'quantity', headerName: 'Quantidade', flex: 1 },
     {
+      field: 'price',
+      headerName: 'Preço',
+      flex: 1,
+      renderCell: param => Number(param.value).toLocaleString('pt-br',{style: 'currency', currency: 'BRL'})
+    },
+    {
       field: 'actions',
       headerName: 'Ações',
       type: 'actions',
@@ -157,13 +163,6 @@ const Products: React.FC = () => {
   const submit = async ({ uid, id, description, price, image, image_url, quantity }: ProductType) => {
     setLoading(true);
     toast.dismiss();
-    if (!uid) {
-      if (idExists(id)) {
-        toast.error(`Já existe um produto com esse código.`)
-        setLoading(false);
-        return;
-      }
-    }
     if (uid) {
       const uploadedFileData = { image, image_url };
       if (fileImage) {
@@ -201,6 +200,11 @@ const Products: React.FC = () => {
       toast.error('Erro ao enviar imagem.');
       return;
     }
+    if (dataGridRows.some(item => item.uid === id)) {
+      toast.warning('Já existe um produto com esse código.')
+      setLoading(false);
+      return;
+    }
     setDoc(doc(database, 'catalog', id.toString()), {
       description,
       price,
@@ -215,15 +219,6 @@ const Products: React.FC = () => {
       setLoading(false);
       setFormIsVisible(false);
     })
-  }
-
-  const idExists = (id: any) => {
-    for (let c = 0; c < dataGridRows.length; c++) {
-      if (id === dataGridRows[c].id) {
-        return true;
-      }
-    }
-    return false;
   }
 
   const uploadFile = async () => {
